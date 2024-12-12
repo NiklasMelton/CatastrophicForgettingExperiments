@@ -113,7 +113,7 @@ def run_experiments(
         rec = recall_score(y_test, y_pred, average="weighted")
 
         # Update metadata with metrics and append to results
-        meta.update({"acc": acc, "pre": pre, "f1": f1, "rec": rec})
+        meta.update({"accuracy": acc, "precision": pre, "f1": f1, "recall": rec})
         results.append(dict(meta))
 
         # Save results to a file in Parquet format
