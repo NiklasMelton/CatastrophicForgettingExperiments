@@ -1,0 +1,14 @@
+name = "CatastrophicForgettingExperiments"
+uuid = "a68321ef-b8f7-4ba4-98c5-2ca3f5c63c20"
+authors = ["Sasha Petrenko <sap625@umsystem.edu>"]
+version = "0.1.0"
+
+[deps]
+AdaptiveResonance = "3d72adc0-63d3-4141-bf9b-84450dd0395b"
+DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+
+[compat]
+AdaptiveResonance = "0.8.5"
+DrWatson = "2.18.0"
+Plots = "1.40.9"
