@@ -14,13 +14,14 @@ models = [
     {"model": GaussianART, "params": {"rho": 0.0, "alpha": 1e-10, "sigma_init": np.array([0.5, 0.5])}},
 ]
 
+
 # Function to load and generate data for the experiments
 def data_loader(
-        n_per_cluster=200,  # Number of data points per cluster
-        sizes=[0.1, 0.2, 0.3, 0.4],  # Sizes of the clusters
-        spacings=[0.1, 0.2, 0.3, 0.4, 0.5],  # Spacing between clusters
-        random_states=[42],  # Random seeds for reproducibility
-        shuffles=[False, True]  # Whether to shuffle the data
+    n_per_cluster=200,  # Number of data points per cluster
+    sizes=[0.1, 0.2, 0.3, 0.4],  # Sizes of the clusters
+    spacings=[0.1, 0.2, 0.3, 0.4, 0.5],  # Spacing between clusters
+    random_states=[42],  # Random seeds for reproducibility
+    shuffles=[False, True]  # Whether to shuffle the data
 ):
     # Iterate over all combinations of parameters
     for size in sizes:
@@ -52,13 +53,14 @@ def data_loader(
                     # Yield the generated data and metadata
                     yield X_train, y_train, X_test, y_test, meta
 
+
 # Function to load experiments by combining data and models
 def experiment_loader(
-        n_per_cluster=200,  # Number of data points per cluster
-        sizes=[0.1, 0.2, 0.3, 0.4],  # Sizes of the clusters
-        spacings=[0.1, 0.2, 0.3, 0.4, 0.5],  # Spacing between clusters
-        random_states=[42],  # Random seeds for reproducibility
-        shuffles=[False, True]  # Whether to shuffle the data
+    n_per_cluster=200,  # Number of data points per cluster
+    sizes=[0.1, 0.2, 0.3, 0.4],  # Sizes of the clusters
+    spacings=[0.1, 0.2, 0.3, 0.4, 0.5],  # Spacing between clusters
+    random_states=[42],  # Random seeds for reproducibility
+    shuffles=[False, True]  # Whether to shuffle the data
 ):
     # Iterate over all data and combine it with the models
     for X_train, y_train, X_test, y_test, meta in data_loader(
@@ -73,13 +75,14 @@ def experiment_loader(
             meta.update({"model": str(model["model"].__class__.__name__)})
             yield model, X_train, y_train, X_test, y_test, meta
 
+
 # Function to run all experiments
 def run_experiments(
-        n_per_cluster=200,  # Number of data points per cluster
-        sizes=[0.1, 0.2, 0.3, 0.4],  # Sizes of the clusters
-        spacings=[0.1, 0.2, 0.3, 0.4, 0.5],  # Spacing between clusters
-        random_states=[42],  # Random seeds for reproducibility
-        shuffles=[False, True]  # Whether to shuffle the data
+    n_per_cluster=200,  # Number of data points per cluster
+    sizes=[0.1, 0.2, 0.3, 0.4],  # Sizes of the clusters
+    spacings=[0.1, 0.2, 0.3, 0.4, 0.5],  # Spacing between clusters
+    random_states=[42],  # Random seeds for reproducibility
+    shuffles=[False, True]  # Whether to shuffle the data
 ):
     # Total number of experiments to compute progress
     n_experiments = len(sizes) * len(spacings) * len(random_states) * len(shuffles) * len(models)
@@ -119,6 +122,7 @@ def run_experiments(
         # Save results to a file in Parquet format
         df = pd.DataFrame(results)
         df.to_parquet("overlap.parquet")
+
 
 # Entry point of the script
 if __name__ == "__main__":

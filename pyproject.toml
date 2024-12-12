@@ -99,6 +99,10 @@ classifiers = [  # Optional
 # https://packaging.python.org/discussions/install-requires-vs-requirements/
 dependencies = [ # Optional
   "numpy",
+  "artlib",
+  "scikit-learn",
+  "tqdm",
+  "pandas",
 ]
 
 # List additional groups of dependencies here (e.g. development
