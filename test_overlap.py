@@ -70,7 +70,7 @@ def experiment_loader(
     ):
         for model in models:
             # Add model information to metadata
-            meta.update({"model": str(model["model"])})
+            meta.update({"model": str(model["model"].__class__.__name__)})
             yield model, X_train, y_train, X_test, y_test, meta
 
 # Function to run all experiments
