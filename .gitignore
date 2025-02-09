@@ -1,0 +1,17 @@
+# Ignore Jupyter notebook checkpoints
+**/.ipynb_checkpoints/
+
+# Ignore Python cache directories and files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Ignore all subdirectories except the root
+/**/*
+!/*
+
+# Optional: ignore hidden system files (e.g., macOS, Windows)
+.DS_Store
+Thumbs.db
+desktop.ini
