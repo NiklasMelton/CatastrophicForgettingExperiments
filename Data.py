@@ -2,11 +2,50 @@ import numpy as np
 import h5py
 from sklearn.model_selection import train_test_split
 
+def generate_symmetric_points(point, radius, separation):
+    """
+    Generate two points symmetrically reflected along the 45-degree line (y = x),
+    separated by the given separation, and each at radius distance from the original point.
+
+    Parameters:
+        point (tuple): Original point (x, y).
+        radius (float): Distance from the original point to the new points.
+        separation (float): Distance between the two new points.
+
+    Returns:
+        tuple: Two new points as ((x1, y1), (x2, y2)).
+    """
+    x, y = point
+
+    # Angle for the 45-degree reflection
+    angle_45 = 5*np.pi / 4  # 45 degrees in radians
+
+    # Adjusting for separation
+    separation_offset = separation / 2.0
+
+    # Calculate displacement along the 45-degree line
+    dx = radius * np.cos(angle_45)
+    dy = radius * np.sin(angle_45)
+
+    # Adjust the displacement for separation
+    separation_dx = separation_offset * np.cos(angle_45 + np.pi / 2)
+    separation_dy = separation_offset * np.sin(angle_45 + np.pi / 2)
+
+    # First new point
+    x1 = x + dx + separation_dx
+    y1 = y + dy + separation_dy
+
+    # Second new point (symmetrically reflected)
+    x2 = x + dx - separation_dx
+    y2 = y + dy - separation_dy
+
+    return (x1, y1), (x2, y2)
 
 def generate_overlap_data(
         num_points_per_class=100,
         side_length=0.1,
         spacing=0.2,
+        radius=0.2,
         random_state=None,
         test_size=0.2,
         shuffle=False,
@@ -41,10 +80,10 @@ def generate_overlap_data(
         np.random.seed(random_state)  # Set random seed for reproducibility
 
     # Define the centers of the three classes along the diagonal
+    root = (0.7, 0.7)
     centers = [
-        (0.5 - spacing, 0.5 - spacing),
-        (0.5, 0.5),
-        (0.5 + spacing, 0.5 + spacing)
+        *generate_symmetric_points(root, radius, spacing),
+        root
     ]
 
     # Prepare arrays for data and labels
@@ -87,38 +126,99 @@ def generate_overlap_data(
     return X_train, y_train, X_test, y_test
 
 
-def load_usps():
+
+def load_usps(shuffle=False, random_state=None):
     """
     Load the USPS dataset from an HDF5 file.
 
+    Parameters
+    ----------
+    shuffle : bool or str, optional
+        If False, the data will be sorted by class labels.
+        If True, the data will be completely shuffled.
+        If 'semi', the data will be semi-shuffled:
+        unique class labels are grouped into sequential pairs,
+        and rows of paired labels are shuffled together.
+    random_state : int, optional
+        Random seed for reproducibility.
+
     Returns
     -------
-    X_tr : np.ndarray
+    X_train : np.ndarray
         Training data.
-    y_tr : np.ndarray
+    y_train : np.ndarray
         Training labels.
-    X_te : np.ndarray
+    X_test : np.ndarray
         Testing data.
-    y_te : np.ndarray
+    y_test : np.ndarray
         Testing labels.
     """
+
+    if random_state is not None:
+        np.random.seed(random_state)  # Set random seed for reproducibility
+
     with h5py.File("usps.h5", 'r') as hf:
         train = hf.get('train')
-        X_tr = train.get('data')[:]  # Training data
-        y_tr = train.get('target')[:]  # Training labels
+        X_train = train.get('data')[:]  # Training data
+        y_train = train.get('target')[:]  # Training labels
         test = hf.get('test')
-        X_te = test.get('data')[:]  # Testing data
-        y_te = test.get('target')[:]  # Testing labels
+        X_test = test.get('data')[:]  # Testing data
+        y_test = test.get('target')[:]  # Testing labels
 
-    return X_tr, y_tr, X_te, y_te
+    if isinstance(shuffle, bool) and shuffle:
+        # Fully shuffle X_train and y_train
+        indices = np.arange(len(y_train))
+        np.random.shuffle(indices)
+        X_train = X_train[indices]
+        y_train = y_train[indices]
+
+    else:
+        # Sort data by class labels if shuffle is disabled
+        sorted_indices = np.argsort(y_train)
+        X_train = X_train[sorted_indices]
+        y_train = y_train[sorted_indices]
+
+        sorted_indices = np.argsort(y_test)
+        X_test = X_test[sorted_indices]
+        y_test = y_test[sorted_indices]
+
+    if isinstance(shuffle, str) and shuffle == 'semi':
+        # Semi-shuffle: group by sequential label pairs and shuffle within pairs
+        unique_labels = np.unique(y_train)
+        sorted_labels = sorted(unique_labels)
+
+        # Group labels into pairs
+        pairs = [sorted_labels[i:i+2] for i in range(0, len(sorted_labels), 2)]
+
+        X_new, y_new = [], []
+
+        for pair in pairs:
+            # Find rows where labels match either class in the pair
+            mask = np.isin(y_train, pair)
+            X_pair, y_pair = X_train[mask], y_train[mask]
+
+            # Shuffle rows within the pair
+            pair_indices = np.arange(len(y_pair))
+            np.random.shuffle(pair_indices)
+            X_pair, y_pair = X_pair[pair_indices], y_pair[pair_indices]
+
+            # Append shuffled data to the new lists
+            X_new.append(X_pair)
+            y_new.append(y_pair)
+
+        # Concatenate all shuffled pairs into new training data
+        X_train = np.vstack(X_new)
+        y_train = np.concatenate(y_new)
+
+    return X_train, y_train, X_test, y_test
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     # Generate some synthetic overlap data
-    X, y, _, _ = generate_overlap_data(num_points_per_class=200, side_length=0.4,
-                                       spacing=0.2, random_state=42)
+    X, y, _, _ = generate_overlap_data(num_points_per_class=200, side_length=0.3,
+                                       radius=0.5, spacing=0.5, random_state=42)
 
     # Plot the generated data
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -137,6 +237,8 @@ if __name__ == "__main__":
 
     # Load the USPS dataset
     X_tr, y_tr, X_te, y_te = load_usps()
+    print(X_tr.min(), X_te.min())
+    print(X_tr.max(),X_te.max())
     print(X_tr.shape, y_tr.shape)  # Print the shapes of the dataset
 
     # Visualize an example image from the USPS dataset
