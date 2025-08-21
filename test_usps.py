@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.neural_network import MLPClassifier
 from CNNClassifier import CNNClassifier
 import json
-
+import umap
 
 CNN_PARAMS = {
     "input_shape": (16, 16, 1),
@@ -17,9 +17,9 @@ CNN_PARAMS = {
     "pool_size": (2, 2),
     "dense_layers": [128],
     "dropout": 0.5,
-    "learning_rate": 0.001,
-    "epochs": 10,
-    "batch_size": 32
+    "learning_rate": 0.01,
+    "epochs": 50,
+    "batch_size": 8
 }
 
 
@@ -27,12 +27,12 @@ CNN_PARAMS = {
 # List of models to evaluate with their respective hyperparameters
 models = [
     {"model": CNNClassifier, "params": CNN_PARAMS},
-    {"model": FuzzyART, "params": {"rho": 0.0, "alpha": 1e-10, "beta": 1.0}},
+    # {"model": FuzzyART, "params": {"rho": 0.0, "alpha": 1e-10, "beta": 1.0}},
+    # {"model": FuzzyART, "params": {"rho": 1.0, "alpha": 1e-10, "beta": 1.0}},
     # {"model": HypersphereART, "params": {"rho": 0.0, "alpha": 1e-10, "r_hat": 0.5 *
     #                                                                           np.sqrt(256), "beta": 1.0}},
     # {"model": GaussianART, "params": {"rho": 0.0, "alpha": 1e-10, "sigma_init":
     #     np.array(256*[0.5])}},
-    {"model": FuzzyART, "params": {"rho": 1.0, "alpha": 1e-10, "beta": 1.0}},
     # {"model": HypersphereART, "params": {"rho": 1.0, "alpha": 1e-10, "r_hat": 0.5 *
     #                                                                           np.sqrt(
     #                                                                               256),
@@ -45,7 +45,8 @@ models = [
 # Function to load and generate data for the experiments
 def data_loader(
         random_states=[42],  # Random seeds for reproducibility
-        shuffles=[False, True, "semi"]  # Whether to shuffle the data
+        shuffles=[False, True, "semi"],  # Whether to shuffle the data
+        use_umap = False,
 ):
     for random_state in random_states:
         for shuffle in shuffles:
@@ -54,6 +55,18 @@ def data_loader(
                 random_state=random_state,
                 shuffle=shuffle
             )
+            # Combine train and test sets if UMAP is used
+            if use_umap:
+                X_combined = np.vstack((X_train, X_test))
+                y_combined = np.hstack((y_train, y_test))
+
+                # Apply supervised UMAP transformation
+                reducer = umap.UMAP(n_components=X_train.shape[1])
+                X_umap_combined = reducer.fit_transform(X_combined, y=y_combined)
+
+                # Split transformed data back into train and test sets
+                X_train, X_test = X_umap_combined[:len(y_train)], X_umap_combined[len(y_train):]
+
             # Compute clustering metrics
             # db_score_train = davies_bouldin_score(X_train, y_train)
             # db_score_test = davies_bouldin_score(X_test, y_test)
@@ -63,7 +76,6 @@ def data_loader(
             # Store metadata for the current configuration
             meta = {
                 "random_state": random_state, "shuffle": str(shuffle),
-                # "db_train": db_score_train, "db_test": db_score_test,
                 "sil_train": sil_score_train, "sil_test": sil_score_test
             }
 
@@ -73,12 +85,14 @@ def data_loader(
 # Function to load experiments by combining data and models
 def experiment_loader(
         random_states=[42],  # Random seeds for reproducibility
-        shuffles=[False, True, "semi"]  # Whether to shuffle the data
+        shuffles=[False, True, "semi"],  # Whether to shuffle the data
+        use_umap=False,
 ):
     # Iterate over all data and combine it with the models
     for X_train, y_train, X_test, y_test, meta in data_loader(
             random_states,
-            shuffles
+            shuffles,
+            use_umap
     ):
         for model in models:
             # Add model information to metadata
@@ -187,7 +201,8 @@ def step_train(cls, X_train, y_train, X_test, y_test, **fit_kwargs):
 # Function to run all experiments
 def run_experiments(
         random_states=[42],  # Random seeds for reproducibility
-        shuffles=[False, True, "semi"]  # Whether to shuffle the data
+        shuffles=[False, True, "semi"],  # Whether to shuffle the data
+        use_umap=False
 ):
     # Total number of experiments to compute progress
     n_experiments = len(random_states) * len(shuffles) * len(models)
@@ -196,13 +211,16 @@ def run_experiments(
     # Iterate through all experiment configurations
     for model, X_train, y_train, X_test, y_test, meta in tqdm(experiment_loader(
             random_states,
-            shuffles
+            shuffles,
+            use_umap
     ), total=n_experiments):
+        DMAX = np.max(np.concatenate([X_train, X_test], axis=0), axis=0)
+        DMIN = np.min(np.concatenate([X_train, X_test], axis=0), axis=0)
         if "ART" in meta["model"]:
             # Initialize SimpleARTMAP with the given model
             cls = SimpleARTMAP(model["model"](**model["params"]))
-            cls.module_a.d_max_ = np.array(256*[1.0])  # Set maximum bounds
-            cls.module_a.d_min_ = np.array(256*[0.0])  # Set minimum bounds
+            cls.module_a.d_max_ = DMAX  # Set maximum bounds
+            cls.module_a.d_min_ = DMIN  # Set minimum bounds
 
             # Prepare data for the model
             X_train_local = cls.prepare_data(X_train)
@@ -214,12 +232,8 @@ def run_experiments(
                                         epsilon=1e-6)
         else:
             cls = model["model"](**model["params"])
-            X_train_local, _, _ = normalize(X_train, np.array(256 * [1.0]),
-                                            np.array(256 * [
-                                                0.0]))
-            X_test_local, _, _ = normalize(X_test, np.array(256 * [1.0]),
-                                           np.array(256 * [
-                                               0.0]))
+            X_train_local, _, _ = normalize(X_train, DMAX, DMIN)
+            X_test_local, _, _ = normalize(X_test, DMAX, DMIN)
             target_names = sorted(np.unique(y_test).tolist())
 
             if "CNN" in meta["model"]:
@@ -249,8 +263,12 @@ def run_experiments(
 
         # Save results to a file in Parquet format
         df = pd.DataFrame(results)
-        df.to_parquet("usps.parquet")
+        if use_umap:
+            df.to_parquet("usps_cnn_umap.parquet")
+        else:
+            df.to_parquet("usps_cnn.parquet")
 
 # Entry point of the script
 if __name__ == "__main__":
     run_experiments()
+    run_experiments(shuffles=[False],use_umap=True)
