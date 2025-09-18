@@ -2,6 +2,7 @@ from artlib import FuzzyART, HypersphereART, GaussianART, SimpleARTMAP, normaliz
 from Data import load_usps
 from sklearn.metrics import precision_score, accuracy_score, f1_score, recall_score, \
     silhouette_score, davies_bouldin_score, confusion_matrix
+from sklearn.neighbors import KNeighborsClassifier
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
@@ -22,17 +23,47 @@ CNN_PARAMS = {
     "batch_size": 32
 }
 
+# --- New: incremental wrapper so we can keep using step_train() unchanged ----
+class KNNIncremental:
+    """
+    Minimal 'partial_fit'-compatible wrapper around KNeighborsClassifier.
+    Accumulates all seen batches and refits the underlying 1-NN each step.
+    """
+    def __init__(self, n_neighbors=1):
+        self.knn = KNeighborsClassifier(n_neighbors=n_neighbors)
+        self._X_seen = None
+        self._y_seen = None
+        self._is_fit = False
+
+    def partial_fit(self, X, y, **_):
+        if self._X_seen is None:
+            self._X_seen = np.asarray(X)
+            self._y_seen = np.asarray(y)
+        else:
+            self._X_seen = np.vstack([self._X_seen, np.asarray(X)])
+            self._y_seen = np.concatenate([self._y_seen, np.asarray(y)])
+        # For 1-NN, (re)fit is cheap; this keeps the rest of the pipeline intact.
+        self.knn.fit(self._X_seen, self._y_seen)
+        self._is_fit = True
+        return self
+
+    def predict(self, X):
+        if not self._is_fit:
+            raise RuntimeError("KNNIncremental used before any partial_fit call.")
+        return self.knn.predict(X)
+
 
 
 # List of models to evaluate with their respective hyperparameters
 models = [
-    {"model": CNNClassifier, "params": CNN_PARAMS},
-    {"model": FuzzyART, "params": {"rho": 0.0, "alpha": 1e-10, "beta": 1.0}},
+    {"model": KNNIncremental, "params": {"n_neighbors": 1}},
+    # {"model": CNNClassifier, "params": CNN_PARAMS},
+    # {"model": FuzzyART, "params": {"rho": 0.0, "alpha": 1e-10, "beta": 1.0}},
     # {"model": HypersphereART, "params": {"rho": 0.0, "alpha": 1e-10, "r_hat": 0.5 *
     #                                                                           np.sqrt(256), "beta": 1.0}},
     # {"model": GaussianART, "params": {"rho": 0.0, "alpha": 1e-10, "sigma_init":
     #     np.array(256*[0.5])}},
-    {"model": FuzzyART, "params": {"rho": 1.0, "alpha": 1e-10, "beta": 1.0}},
+    # {"model": FuzzyART, "params": {"rho": 1.0, "alpha": 1e-10, "beta": 1.0}},
     # {"model": HypersphereART, "params": {"rho": 1.0, "alpha": 1e-10, "r_hat": 0.5 *
     #                                                                           np.sqrt(
     #                                                                               256),
@@ -249,7 +280,7 @@ def run_experiments(
 
         # Save results to a file in Parquet format
         df = pd.DataFrame(results)
-        df.to_parquet("usps.parquet")
+        df.to_parquet("usps_knn.parquet")
 
 # Entry point of the script
 if __name__ == "__main__":
