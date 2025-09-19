@@ -63,6 +63,6 @@ if __name__ == "__main__":
             "Davies-Bouldin": data["davies_bouldin"],
             "Calinski-Harabasz": data["calinski_harabasz"]
         })
-        file_name = f"iterative_clustering_indices_shuffle_{shuffle}.csv"
+        file_name = f"usps_iterative_clustering_indices_shuffle_{shuffle}.csv"
         df.to_csv(file_name, index=False)
         print(f"Results saved to {file_name}")

@@ -52,6 +52,6 @@ if __name__ == "__main__":
             "Sample Index": np.arange(len(data["iterative_silhouette"])),
             "Iterative Silhouette": data["iterative_silhouette"]
         })
-        file_name = f"iterative_silhouette_shuffle_{shuffle}.csv"
+        file_name = f"usps_iterative_silhouette_shuffle_{shuffle}.csv"
         df.to_csv(file_name, index=False)
         print(f"Results saved to {file_name}")
