@@ -2,6 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 data = pd.read_parquet("usps.parquet")
+data = pd.concat([data, pd.read_parquet("usps_knn.parquet")], ignore_index=True)
+print(data.columns)
 data.sort_values(by="spacing", inplace=True)
 
 for model, model_group in data.groupby("model"):

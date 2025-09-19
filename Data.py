@@ -213,6 +213,116 @@ def load_usps(shuffle=False, random_state=None):
     return X_train, y_train, X_test, y_test
 
 
+
+import numpy as np
+
+def load_mnist(shuffle=False, random_state=None, source="torchvision", data_root="./data"):
+    """
+    Load the MNIST dataset in the same data type/format as `load_usps`.
+
+    Parameters
+    ----------
+    shuffle : bool or str, optional
+        If False, the data will be sorted by class labels.
+        If True, the training data will be fully shuffled.
+        If 'semi', the training data will be semi-shuffled:
+        unique class labels are grouped into sequential pairs and rows
+        within each pair are shuffled together.
+    random_state : int, optional
+        Random seed for reproducibility.
+    source : {'torchvision', 'openml'}, optional
+        Backend to load MNIST. 'torchvision' prefers local files and can
+        download if missing; 'openml' uses sklearn to fetch.
+    data_root : str, optional
+        Root folder to store/download data when using torchvision.
+
+    Returns
+    -------
+    X_train : np.ndarray, shape (60000, 784), dtype float32
+    y_train : np.ndarray, shape (60000,), dtype int64
+    X_test  : np.ndarray, shape (10000, 784), dtype float32
+    y_test  : np.ndarray, shape (10000,), dtype int64
+    """
+    if random_state is not None:
+        np.random.seed(random_state)
+
+    # --- Load raw MNIST ---
+    if source == "torchvision":
+        try:
+            from torchvision.datasets import MNIST
+            import torchvision.transforms as T
+
+            # Avoid PIL-to-tensor default to keep full control of dtype
+            to_np = T.Compose([])  # no-op; we'll handle numpy conversion manually
+
+            train_ds = MNIST(root=data_root, train=True, download=True, transform=None)
+            test_ds  = MNIST(root=data_root, train=False, download=True, transform=None)
+
+            # Convert to numpy arrays (flattened, float32 in [0,1])
+            X_train = np.stack([np.array(img, dtype=np.uint8).reshape(-1) for img, _ in train_ds], axis=0)
+            y_train = np.array([int(lbl) for _, lbl in train_ds], dtype=np.int64)
+            X_test  = np.stack([np.array(img, dtype=np.uint8).reshape(-1) for img, _ in test_ds], axis=0)
+            y_test  = np.array([int(lbl) for _, lbl in test_ds], dtype=np.int64)
+
+        except Exception:
+            # Fallback to OpenML if torchvision is unavailable
+            source = "openml"
+
+    if source == "openml":
+        from sklearn.datasets import fetch_openml
+        mnist = fetch_openml("mnist_784", version=1, as_frame=False, parser="auto")
+        X = mnist.data  # (70000, 784), dtype float64 by default
+        y = mnist.target.astype(np.int64)
+
+        # Split into train/test in the canonical MNIST order: first 60k/last 10k
+        X_train, X_test = X[:60000], X[60000:]
+        y_train, y_test = y[:60000], y[60000:]
+
+    # --- Ensure USPS-like dtype/scale/shape ---
+    # Scale pixels to [0,1] and cast to float32; ensure labels are int64
+    X_train = (X_train.astype(np.float32) / 255.0)
+    X_test  = (X_test.astype(np.float32)  / 255.0)
+    y_train = y_train.astype(np.int64)
+    y_test  = y_test.astype(np.int64)
+
+    # --- Shuffle / sort behavior matching your USPS loader ---
+    if isinstance(shuffle, bool) and shuffle:
+        # Full shuffle on training only
+        indices = np.arange(len(y_train))
+        np.random.shuffle(indices)
+        X_train = X_train[indices]
+        y_train = y_train[indices]
+    else:
+        # Sort both train and test by label
+        sorted_indices = np.argsort(y_train)
+        X_train = X_train[sorted_indices]
+        y_train = y_train[sorted_indices]
+
+        sorted_indices = np.argsort(y_test)
+        X_test = X_test[sorted_indices]
+        y_test = y_test[sorted_indices]
+
+    if isinstance(shuffle, str) and shuffle == 'semi':
+        # Semi-shuffle: pair labels (0,1), (2,3), ..., (8,9)
+        unique_labels = np.unique(y_train)
+        sorted_labels = sorted(unique_labels)
+        pairs = [sorted_labels[i:i+2] for i in range(0, len(sorted_labels), 2)]
+
+        X_new, y_new = [], []
+        for pair in pairs:
+            mask = np.isin(y_train, pair)
+            X_pair, y_pair = X_train[mask], y_train[mask]
+            pair_indices = np.arange(len(y_pair))
+            np.random.shuffle(pair_indices)
+            X_new.append(X_pair[pair_indices])
+            y_new.append(y_pair[pair_indices])
+
+        X_train = np.vstack(X_new)
+        y_train = np.concatenate(y_new)
+
+    return X_train, y_train, X_test, y_test
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
@@ -246,4 +356,16 @@ if __name__ == "__main__":
     plt.figure()
     plt.imshow(a, cmap='gray')
     plt.title("Example USPS Image")
+
+    # Load the MNIST dataset
+    X_tr, y_tr, X_te, y_te = load_mnist()
+    print(X_tr.min(), X_te.min())
+    print(X_tr.max(),X_te.max())
+    print(X_tr.shape, y_tr.shape)  # Print the shapes of the dataset
+
+    # Visualize an example image from the USPS dataset
+    a = X_tr[0].reshape((28, 28))  # Reshape the first sample to 28x28
+    plt.figure()
+    plt.imshow(a, cmap='gray')
+    plt.title("Example MNIST Image")
     plt.show()
